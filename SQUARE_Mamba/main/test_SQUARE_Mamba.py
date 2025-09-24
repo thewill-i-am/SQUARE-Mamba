@@ -10,27 +10,30 @@ current_directory = os.getcwd()
 file_path = f"{current_directory}/main"
 os.chdir(file_path)
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 def test(test_gen, model):
   model.eval()
   prediction = []
   with torch.no_grad():
     for iteration, (Data) in enumerate(test_gen):
-      Data = Data.to("cuda")
+      Data = Data.to(device)
       spei = model.forward(Data)
-      prediction.append(spei.cpu().squeeze(1))
-  return np.array(prediction)
+      prediction.append(spei.cpu().squeeze(1).numpy())
+  return np.stack(prediction)
 
 
 if __name__ == '__main__':
   
   model = SQUARE_Mamba(in_channel=105)
-  model = model.to("cuda")
+  model = model.to(device)
   data_Pooncarie, gt_Pooncarie = load_data(1260, 1476)
   testing_data, testing_gt = Create_dataset(data_Pooncarie, gt_Pooncarie, num_sample=201)
   testloader = DataLoader(testing_data, batch_size=201, shuffle=False)
     
   folder_path = "./checkpoint/SQUARE_Mamba.pkl"
-  model.load_state_dict(torch.load(folder_path))
+  model.load_state_dict(torch.load(folder_path, map_location=device))
   prediction_temp = test(testloader, model)
   gt_test = testing_gt[8:201, 4]
   prediction = prediction_temp[:, 8:201]

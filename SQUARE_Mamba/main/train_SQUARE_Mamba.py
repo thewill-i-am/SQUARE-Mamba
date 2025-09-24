@@ -13,6 +13,8 @@ current_directory = os.getcwd()
 file_path = f"{current_directory}/main"
 os.chdir(file_path)
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 parser = argparse.ArgumentParser(description="PyTorch Train")
 parser.add_argument("--start_epoch", type=int,default=1, help="Start epoch from 1")
 parser.add_argument('--model', default='SQUARE_Mamba',type=str, help='Import which network')
@@ -26,8 +28,8 @@ def validate(val_gen, model, epoch, best_loss_R2):
   with torch.no_grad():
     for iteration, (Data, gt) in tqdm(enumerate(val_gen)):
          
-      gt = gt.to('cuda')
-      Data = Data.to("cuda")
+      gt = gt.to(device)
+      Data = Data.to(device)
       spei = model.forward(Data)
       loss = loss_function(gt, spei)
       
@@ -54,8 +56,8 @@ def train(train_gen, model, optimizer, epoch):
   for iteration, (Data, gt) in tqdm(enumerate(train_gen)):
       
     optimizer.zero_grad()
-    gt = gt.to('cuda')
-    Data = Data.to("cuda")
+    gt = gt.to(device)
+    Data = Data.to(device)
     spei = model.forward(Data)
     
     loss = loss_function(gt, spei)
@@ -84,8 +86,9 @@ if __name__ == '__main__':
   Net = import_module('networks.' + opt.model)
   seed = 42
   torch.manual_seed(seed)
-  torch.cuda.manual_seed_all(seed)
-  model = Net.make_model().to("cuda")
+  if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+  model = Net.make_model().to(device)
   num_epoch = training_settings[0]['nEpochs']
 
   optimizer = optim.AdamW(model.parameters(), lr=opt.lr, weight_decay=0.0001)

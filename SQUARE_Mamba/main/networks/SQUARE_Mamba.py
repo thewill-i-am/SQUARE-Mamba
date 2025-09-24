@@ -19,7 +19,7 @@ def map_generation(spei_tensor, channels):
 
   batch_size = spei_tensor.shape[0]
   pixel_vector = spei_tensor.reshape(batch_size, 9, -1)
-  map = torch.zeros((batch_size, 3, 3, channels)).to("cuda") 
+  map = torch.zeros((batch_size, 3, 3, channels), device=spei_tensor.device, dtype=spei_tensor.dtype)
 
   map[:, 0, 0:3, :] = pixel_vector[:, 0:3, :]
   map[:, 1, 0:3, :] = pixel_vector[:, 3:6, :]
@@ -170,27 +170,27 @@ class QLTEM(nn.Module):
     
     q1=rearrange(q1,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
     q1 = self.qtemporal_1(q1, self.temporal1_v1, self.temporal1_v2)
-    q1=torch.cat(q1).type('torch.FloatTensor').cuda()
+    q1 = torch.cat(q1).to(x.device, dtype=x.dtype)
     q1=rearrange(q1,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
     
     q2=rearrange(q2,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
     q2 = self.qtemporal_2(q2, self.temporal2_v1, self.temporal2_v2)
-    q2=torch.cat(q2).type('torch.FloatTensor').cuda()
+    q2 = torch.cat(q2).to(x.device, dtype=x.dtype)
     q2=rearrange(q2,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
     
     q3=rearrange(q3,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
     q3 = self.qtemporal_3(q3, self.temporal3_v1, self.temporal3_v2)
-    q3=torch.cat(q3).type('torch.FloatTensor').cuda()
+    q3 = torch.cat(q3).to(x.device, dtype=x.dtype)
     q3=rearrange(q3,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
     
     q4=rearrange(q4,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
     q4 = self.qtemporal_4(q4, self.temporal4_v1, self.temporal4_v2)
-    q4=torch.cat(q4).type('torch.FloatTensor').cuda()
+    q4 = torch.cat(q4).to(x.device, dtype=x.dtype)
     q4=rearrange(q4,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
 
     q5=rearrange(q5,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
     q5 = self.qtemporal_5(q5, self.temporal5_v1, self.temporal5_v2)
-    q5=torch.cat(q5).type('torch.FloatTensor').cuda()
+    q5 = torch.cat(q5).to(x.device, dtype=x.dtype)
     q5=rearrange(q5,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
     
     return q1, q2, q3, q4, q5
