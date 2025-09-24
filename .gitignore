@@ -1,0 +1,8 @@
+.venv-3.10/
+SQUARE_Mamba demo/main/__pycache__/
+SQUARE_Mamba demo/main/functions/__pycache__/
+SQUARE_Mamba demo/main/networks/__pycache__/
+SQUARE_Mamba demo/main/checkpoint/
+SQUARE_Mamba demo/main/Result/SQUARE_Mamba_wo_QLTEM/prediction_Pooncarie.csv
+SQUARE_Mamba demo/main/Result/SQUARE_Mamba_wo_QLTEM/gt_Pooncarie.csv
+*.pyc

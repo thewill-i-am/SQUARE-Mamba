@@ -1,0 +1,11 @@
+# Core dependencies for the SQUARE-Mamba demo and training scripts
+numpy
+pandas
+scikit-learn
+torch
+pennylane
+mamba-ssm
+einops
+matplotlib
+# Utilities
+tqdm

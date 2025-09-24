@@ -15,7 +15,7 @@ def map_generation(spei_tensor, channels):
 
   batch_size = spei_tensor.shape[0]
   pixel_vector = spei_tensor.reshape(batch_size, 9, -1)
-  map = torch.zeros((batch_size, 3, 3, channels)).to("cuda")
+  map = torch.zeros((batch_size, 3, 3, channels), device=spei_tensor.device)
 
   map[:, 0, 0:3, :] = pixel_vector[:, 0:3, :]
   map[:, 1, 0:3, :] = pixel_vector[:, 3:6, :]
