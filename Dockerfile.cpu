@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install --no-install-recommends -y \
+        build-essential \
+        libopenblas-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-cpu.txt ./
+RUN pip install --upgrade pip \
+    && pip install -r requirements-cpu.txt
+
+COPY . .
+
+ENV TORCH_MPS_DISABLE=1 \
+    PYTHONPATH=/app
+
+CMD ["python", "SQUARE_Mamba/demo.py", "--mode", "SQUARE-Mamba", "--skip-test", "--no-plot"]

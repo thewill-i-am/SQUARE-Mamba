@@ -17,7 +17,7 @@ from typing import Dict, Iterable, List, Tuple
 
 AVAILABLE_MODES: Dict[str, str] = {
     "SQUARE-Mamba": "SQUARE_Mamba",
-    "SQUARE-Mamba w/o QLTEM": "SQUARE_Mamba_wo_QLTEM",
+    "SQUARE_Mamba_Not_Quantum": "SQUARE_Mamba_Not_Quantum",
 }
 
 
@@ -41,6 +41,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip plotting (useful when matplotlib is unavailable).",
     )
+    parser.add_argument(
+        "--save-plot",
+        type=Path,
+        help="Write the plot to this file (even if --no-plot is passed).",
+    )
     return parser.parse_args()
 
 
@@ -62,6 +67,8 @@ def load_series(base_path: Path, mode_key: str) -> Tuple[List[float], List[float
     gt_path = result_dir / "gt_Pooncarie.csv"
     pred_path = result_dir / "prediction_Pooncarie.csv"
 
+    print("hola")
+    print(pred_path)
     if not gt_path.exists() or not pred_path.exists():
         raise FileNotFoundError(
             "Result files not found. Run the test script first or use --skip-test only when files already exist."
@@ -94,8 +101,19 @@ def compute_metrics(gt: Iterable[float], prediction: Iterable[float]) -> Dict[st
     return {"MAE": mae, "RMSE": rmse, "R2": r2}
 
 
-def plot_curves(gt: List[float], prediction: List[float], metrics: Dict[str, float], mode_label: str) -> None:
+def plot_curves(
+    gt: List[float],
+    prediction: List[float],
+    metrics: Dict[str, float],
+    mode_label: str,
+    *,
+    save_path: Path | None = None,
+    show: bool = True,
+) -> None:
     try:
+        import matplotlib
+        if save_path is not None or not show:
+            matplotlib.use("Agg", force=True)
         import matplotlib.pyplot as plt
     except ImportError as exc:  # pragma: no cover - purely defensive
         raise SystemExit(
@@ -148,8 +166,8 @@ def plot_curves(gt: List[float], prediction: List[float], metrics: Dict[str, flo
     ax.set_ylim(-3, 3)
     ax.set_xticks(xticks)
     ax.set_xticklabels(xtick_labels, rotation=0)
-    ax.set_ylabel("Drought Forecasting", fontname="Times New Roman", fontsize=14)
-    ax.set_title(mode_label.replace("_", " "), fontname="Times New Roman", fontsize=18)
+    ax.set_ylabel("Drought Forecasting", fontname="DejaVu Serif", fontsize=14)
+    ax.set_title(mode_label.replace("_", " "), fontname="DejaVu Serif", fontsize=18)
     ax.grid(True, color=(0, 0, 0), alpha=0.3)
     ax.set_facecolor("white")
     ax.tick_params(labelsize=14)
@@ -157,12 +175,21 @@ def plot_curves(gt: List[float], prediction: List[float], metrics: Dict[str, flo
 
     text_x = max(1, min(len(gt) - 5, int(len(gt) * 0.89)))
     text_y = 2.5
-    ax.text(text_x, text_y, f"MAE = {metrics['MAE']:.4f}", fontsize=16, fontname="Times New Roman")
-    ax.text(text_x, text_y - 0.8, f"RMSE = {metrics['RMSE']:.4f}", fontsize=16, fontname="Times New Roman")
-    ax.text(text_x, text_y - 1.6, f"R² = {metrics['R2']:.4f}", fontsize=16, fontname="Times New Roman")
+    ax.text(text_x, text_y, f"MAE = {metrics['MAE']:.4f}", fontsize=16, fontname="DejaVu Serif")
+    ax.text(text_x, text_y - 0.8, f"RMSE = {metrics['RMSE']:.4f}", fontsize=16, fontname="DejaVu Serif")
+    ax.text(text_x, text_y - 1.6, f"R² = {metrics['R2']:.4f}", fontsize=16, fontname="DejaVu Serif")
 
     fig.tight_layout()
-    plt.show()
+
+    if save_path is not None:
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=200)
+        print(f"[demo] Plot saved to {save_path}")
+
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
 def main() -> None:
@@ -184,8 +211,16 @@ def main() -> None:
     for name, value in metrics.items():
         print(f"  {name}: {value:.4f}")
 
-    if not args.no_plot:
-        plot_curves(gt, prediction, metrics, mode_key)
+    should_plot = not args.no_plot or args.save_plot is not None
+    if should_plot:
+        plot_curves(
+            gt,
+            prediction,
+            metrics,
+            mode_key,
+            save_path=args.save_plot,
+            show=not args.no_plot,
+        )
     else:
         print("[demo] Plot skipped.")
 

@@ -17,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser(description="PyTorch Train")
 parser.add_argument("--start_epoch", type=int,default=1, help="Start epoch from 1")
-parser.add_argument('--model', default='SQUARE_Mamba_wo_QLTEM',type=str, help='Import which network')
+parser.add_argument('--model', default='SQUARE_Mamba_Not_Quantum',type=str, help='Import which network')
 parser.add_argument('--lr', default=1e-3, help='initial learning rate')
 training_settings = [{'nEpochs': 251, 'start_epoch': 1}]
 
@@ -44,7 +44,7 @@ def validate(val_gen, model, epoch, best_loss_R2):
 
     if best_loss_R2 < val_loss_r2:
       best_loss_R2 = val_loss_r2
-      torch.save(model.state_dict(), "./checkpoint/SQUARE_Mamba_wo_QLTEM.pkl")
+      torch.save(model.state_dict(), "./checkpoint/SQUARE_Mamba_Not_Quantum.pkl")
 
   return val_loss, best_loss_R2
 
