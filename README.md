@@ -113,8 +113,8 @@ python SQUARE_Mamba/demo.py \
     --no-plot
 
 # Classical "Not Quantum" variant
-python SQUARE_Mamba/demo.py --mode "SQUARE_Mamba_Not_Quantum" \
-    --mode "SQUARE-Mamba" \
+python SQUARE_Mamba/demo.py \
+    --mode "SQUARE_Mamba_Not_Quantum" \
     --skip-test \
     --save-plot exports/quantum_plot.png \
     --no-plot
