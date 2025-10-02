@@ -17,6 +17,10 @@ def make_model():
 provider = QbraidProvider(api_key=os.environ.get("QBRAID_API_KEY"))
 dev = provider.get_device('qbraid_qir_simulator')
 
+#dev = qml.device("default.qubit", wires=3)
+
+
+
 def map_generation(spei_tensor, channels):
 
   batch_size = spei_tensor.shape[0]
