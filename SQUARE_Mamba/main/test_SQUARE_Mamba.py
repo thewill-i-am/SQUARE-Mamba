@@ -38,7 +38,7 @@ if __name__ == '__main__':
   testloader = DataLoader(testing_data, batch_size=201, shuffle=False)
 
   checkpoint_dir = BASE_DIR / "checkpoint"
-  folder_path = checkpoint_dir / "SQUARE_Mamba_final_20251001_192812.pkl"
+  folder_path = checkpoint_dir / "SQUARE_Mamba.pkl"
   model.load_state_dict(torch.load(folder_path, map_location=device))
 
   prediction_temp = test(testloader, model)
