@@ -1,19 +1,138 @@
 import os
+import sys
+import warnings
+from functools import partial
+
 import torch
 import torch.nn as nn
 import pennylane as qml
-from mamba_ssm import Mamba
 from einops import rearrange
-import sys
+from mamba_ssm import Mamba
 
 current_directory = os.getcwd()
 file_path = f"{current_directory}"
 os.chdir(file_path)
 ##
-def make_model():
-  return SQUARE_Mamba(in_channel=105)
+def make_model(in_channel=105, noise_config=None, quantum_device=None, shots=None):
+  return SQUARE_Mamba(
+    in_channel=in_channel,
+    noise_config=noise_config,
+    quantum_device=quantum_device,
+    shots=shots,
+  )
 
-dev = qml.device("default.qubit", wires=3)
+
+class NoiseManager:
+  SUPPORTED_CHANNELS = {
+    "depolarizing",
+    "amplitude_damping",
+    "phase_damping",
+    "bit_flip",
+    "phase_flip",
+  }
+
+  def __init__(self, config=None):
+    self.device_name = None
+    self.shots = None
+    self.channels = []
+    if config is None:
+      return
+
+    if isinstance(config, dict) and "channels" in config:
+      channels = config.get("channels", [])
+      self.device_name = config.get("device")
+      self.shots = config.get("shots")
+    else:
+      channels = config
+
+    if isinstance(channels, dict):
+      channels = [channels]
+
+    for channel in channels or []:
+      parsed = self._parse_channel(channel)
+      if parsed is not None:
+        self.channels.append(parsed)
+
+  def _parse_channel(self, channel_config):
+    if not isinstance(channel_config, dict):
+      warnings.warn("Ignoring invalid noise channel configuration (expected dict).", RuntimeWarning)
+      return None
+
+    name = channel_config.get("name") or channel_config.get("type")
+    if name is None:
+      warnings.warn("Noise channel is missing a 'name'/'type' key; skipping.", RuntimeWarning)
+      return None
+
+    name = name.lower()
+    if name not in self.SUPPORTED_CHANNELS:
+      warnings.warn(f"Noise channel '{name}' is not supported; skipping.", RuntimeWarning)
+      return None
+
+    if name == "depolarizing":
+      prob = float(channel_config.get("probability", channel_config.get("p", 0.0)))
+      prob = min(max(prob, 0.0), 1.0)
+      return {"name": name, "prob": prob}
+
+    if name == "amplitude_damping":
+      gamma = float(channel_config.get("gamma", channel_config.get("probability", channel_config.get("p", 0.0))))
+      gamma = min(max(gamma, 0.0), 1.0)
+      return {"name": name, "gamma": gamma}
+
+    if name == "phase_damping":
+      lam = float(channel_config.get("lam", channel_config.get("probability", channel_config.get("p", 0.0))))
+      lam = min(max(lam, 0.0), 1.0)
+      return {"name": name, "lam": lam}
+
+    if name == "bit_flip":
+      prob = float(channel_config.get("probability", channel_config.get("p", 0.0)))
+      prob = min(max(prob, 0.0), 1.0)
+      return {"name": name, "prob": prob}
+
+    if name == "phase_flip":
+      prob = float(channel_config.get("probability", channel_config.get("p", 0.0)))
+      prob = min(max(prob, 0.0), 1.0)
+      return {"name": name, "prob": prob}
+
+    return None
+
+  @property
+  def enabled(self):
+    return len(self.channels) > 0
+
+  def apply(self, wires):
+    if not self.enabled:
+      return
+
+    for channel in self.channels:
+      name = channel["name"]
+      if name == "depolarizing":
+        for wire in wires:
+          qml.DepolarizingChannel(channel["prob"], wires=wire)
+      elif name == "amplitude_damping":
+        for wire in wires:
+          qml.AmplitudeDamping(channel["gamma"], wires=wire)
+      elif name == "phase_damping":
+        for wire in wires:
+          qml.PhaseDamping(channel["lam"], wires=wire)
+      elif name == "bit_flip":
+        for wire in wires:
+          qml.BitFlip(channel["prob"], wires=wire)
+      elif name == "phase_flip":
+        for wire in wires:
+          qml.PhaseFlip(channel["prob"], wires=wire)
+
+
+def create_quantum_device(noise_manager, override_device=None, shots=None):
+  device_name = override_device or noise_manager.device_name
+  if device_name is None:
+    device_name = "default.mixed" if noise_manager.enabled else "default.qubit"
+
+  device_kwargs = {"wires": 3}
+  resolved_shots = shots if shots is not None else noise_manager.shots
+  if resolved_shots is not None:
+    device_kwargs["shots"] = resolved_shots
+
+  return qml.device(device_name, **device_kwargs)
 
 def map_generation(spei_tensor, channels):
 
@@ -100,7 +219,7 @@ class spatial_encoding_block(nn.Module):
     return feature_local.reshape(-1, 15, 7)
   
   
-def qnn(embedding, p, cp):
+def qnn(embedding, p, cp, noise_manager=None):
 
   measure_set = [0, 1, 2]
   groups = [[0, 1, 2]]
@@ -131,19 +250,25 @@ def qnn(embedding, p, cp):
     qml.ctrl(qml.PauliX, control=[ws[1], ws[2]], control_values="10")(ws[0])
     qml.ctrl(qml.PauliX, control=[ws[2], ws[0]], control_values="10")(ws[1])
 
+    if noise_manager is not None:
+      noise_manager.apply(ws)
+
   exp_vals_z = [qml.expval(qml.PauliZ(w)) for w in measure_set]
   return exp_vals_z
         
 class QLTEM(nn.Module):
-  def __init__(self):
+  def __init__(self, noise_config=None, quantum_device=None, shots=None):
     super(QLTEM, self).__init__()
-    
-    self.qtemporal_1=qml.QNode(qnn, dev, interface="torch", diff_method='best')
-    self.qtemporal_2=qml.QNode(qnn, dev, interface="torch", diff_method='best')
-    self.qtemporal_3=qml.QNode(qnn, dev, interface="torch", diff_method='best')
-    self.qtemporal_4=qml.QNode(qnn, dev, interface="torch", diff_method='best') 
-    self.qtemporal_5=qml.QNode(qnn, dev, interface="torch", diff_method='best')
-    
+
+    self.noise_manager = NoiseManager(noise_config)
+    self.dev = create_quantum_device(self.noise_manager, override_device=quantum_device, shots=shots)
+
+    self.qtemporal_1 = self._build_qnode()
+    self.qtemporal_2 = self._build_qnode()
+    self.qtemporal_3 = self._build_qnode()
+    self.qtemporal_4 = self._build_qnode()
+    self.qtemporal_5 = self._build_qnode()
+
     self.temporal1_v1 = nn.Parameter(torch.randn((3,  3)) * torch.tensor(0), True)
     self.temporal1_v2 = nn.Parameter(torch.randn(( 2)) * torch.tensor(0), True)
     
@@ -158,6 +283,10 @@ class QLTEM(nn.Module):
 
     self.temporal5_v1 = nn.Parameter(torch.randn((3, 3)) * torch.tensor(0), True)
     self.temporal5_v2 = nn.Parameter(torch.randn(( 2)) * torch.tensor(0), True)
+
+  def _build_qnode(self):
+    circuit = partial(qnn, noise_manager=self.noise_manager)
+    return qml.QNode(circuit, self.dev, interface="torch", diff_method='best')
   
   def forward(self,x):
 
@@ -247,13 +376,13 @@ class feature_fusion_block(nn.Module):
     return predicted_SPEI
 
 class SQUARE_Mamba(nn.Module):
-  def __init__(self, in_channel):
+  def __init__(self, in_channel, noise_config=None, quantum_device=None, shots=None):
     super(SQUARE_Mamba, self).__init__()
 
     self.in_channel = in_channel
     self.SEB = spatial_encoding_block(self.in_channel)
     self.LTEM = LTEM()
-    self.QLTEM = QLTEM()
+    self.QLTEM = QLTEM(noise_config=noise_config, quantum_device=quantum_device, shots=shots)
     self.FFB = feature_fusion_block()
     self.tanh = nn.Tanh()
 

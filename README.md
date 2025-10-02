@@ -79,6 +79,18 @@ Both scripts:
 - Save checkpoints into `SQUARE_Mamba/main/checkpoint/` (files ending with `_cpu.pt`).
 - Print training/validation losses every epoch.
 
+### Quantum Noise Simulation (PennyLane)
+
+The quantum encoder now supports configurable noise channels powered by PennyLane.
+
+- Use `--noise` with a comma-separated list of `name=value` pairs to activate noise.
+  - Supported channel names: `depolarizing`, `bit_flip`, `phase_flip`, `phase_damping`, `amplitude_damping`.
+  - Example: `--noise depolarizing=0.02,amplitude_damping=0.05`.
+- Optionally override the simulation backend with `--noise-device` (defaults to `default.qubit` when noiseless and `default.mixed` when noise is enabled).
+- Set `--noise-shots` to sample measurement statistics instead of using analytic expectations.
+
+The same flags are also available in `test_SQUARE_Mamba.py`, enabling side-by-side evaluation of noisy and noiseless models. Programmatic use is supported via `networks.SQUARE_Mamba.make_model(noise_config=...)` if you need finer control (e.g., passing a pre-built dictionary of channels).
+
 ## Testing / Inference
 
 After training, generate CSV outputs with:

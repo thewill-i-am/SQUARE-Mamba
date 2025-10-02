@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -11,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
   sys.path.insert(0, str(BASE_DIR))
 
-from functions.util import Create_dataset, load_data
+from functions.util import Create_dataset, load_data, parse_noise_spec
 from networks.SQUARE_Mamba import SQUARE_Mamba
 
 
@@ -30,7 +31,38 @@ def test(test_gen, model):
 
 
 if __name__ == '__main__':
-  model = SQUARE_Mamba(in_channel=105)
+  parser = argparse.ArgumentParser(description='Evaluate the SQUARE-Mamba model on the Pooncarie test set.')
+  parser.add_argument(
+    '--noise',
+    default=None,
+    help="Comma-separated list of quantum noise channels, e.g. 'depolarizing=0.02,phase_flip=0.01'.",
+  )
+  parser.add_argument(
+    '--noise-device',
+    default=None,
+    help='Override the PennyLane device used for the quantum encoder.',
+  )
+  parser.add_argument(
+    '--noise-shots',
+    type=int,
+    default=None,
+    help='Set the number of shots for stochastic noise simulation.',
+  )
+  args = parser.parse_args()
+
+  noise_config = parse_noise_spec(args.noise)
+  if noise_config is not None:
+    if args.noise_device is not None:
+      noise_config.setdefault('device', args.noise_device)
+    if args.noise_shots is not None:
+      noise_config.setdefault('shots', args.noise_shots)
+
+  model = SQUARE_Mamba(
+    in_channel=105,
+    noise_config=noise_config,
+    quantum_device=args.noise_device,
+    shots=args.noise_shots,
+  )
   model = model.to(device)
 
   data_Pooncarie, gt_Pooncarie = load_data(1260, 1476)

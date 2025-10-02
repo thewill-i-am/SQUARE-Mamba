@@ -1,8 +1,10 @@
-import torch
-from sklearn.preprocessing import StandardScaler
+import warnings
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
+import torch
+from sklearn.preprocessing import StandardScaler
 
 
 _BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,3 +52,53 @@ def Create_dataset(data, GT, num_sample):
     gt.append(GT[i+15, :9])
 
   return torch.tensor(X).transpose(1, 2).float(), torch.tensor(gt).float()
+
+
+def parse_noise_spec(spec: str | None):
+  if spec is None:
+    return None
+
+  spec = spec.strip()
+  if not spec or spec.lower() in {"none", "off", "false"}:
+    return None
+
+  channel_mappings = {
+    "depolarizing": "probability",
+    "bit_flip": "probability",
+    "phase_flip": "probability",
+    "phase_damping": "lam",
+    "amplitude_damping": "gamma",
+  }
+
+  channels = []
+  for chunk in spec.split(','):
+    entry = chunk.strip()
+    if not entry:
+      continue
+    if '=' not in entry:
+      warnings.warn(
+        f"Noise specification '{entry}' is invalid (expected format name=value); skipping.",
+        RuntimeWarning,
+      )
+      continue
+
+    name, value = entry.split('=', 1)
+    channel_name = name.strip().lower()
+
+    try:
+      parameter_value = float(value)
+    except ValueError:
+      warnings.warn(
+        f"Noise specification '{entry}' has a non-numeric value; skipping.",
+        RuntimeWarning,
+      )
+      continue
+
+    parameter_name = channel_mappings.get(channel_name, "probability")
+    channel = {"name": channel_name, parameter_name: parameter_value}
+    channels.append(channel)
+
+  if not channels:
+    return None
+
+  return {"channels": channels}

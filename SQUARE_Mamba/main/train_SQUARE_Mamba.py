@@ -19,13 +19,29 @@ os.chdir(BASE_DIR)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-from functions.util import Create_dataset, load_data, r_square
+from functions.util import Create_dataset, load_data, parse_noise_spec, r_square
 
 parser = argparse.ArgumentParser(description="PyTorch Train")
 parser.add_argument("--start_epoch", type=int, default=1, help="Start epoch from 1")
 parser.add_argument('--model', default='SQUARE_Mamba', type=str, help='Import which network')
 parser.add_argument('--lr', default=1e-3, help='initial learning rate')
 parser.add_argument('--epochs', type=int, help='Override the default epoch count (251).')
+parser.add_argument(
+    '--noise',
+    default=None,
+    help="Comma-separated list of quantum noise channels, e.g. 'depolarizing=0.02,amplitude_damping=0.05'.",
+)
+parser.add_argument(
+    '--noise-device',
+    default=None,
+    help="Override the PennyLane device used for the quantum encoder (defaults to default.qubit or default.mixed when noise is enabled).",
+)
+parser.add_argument(
+    '--noise-shots',
+    type=int,
+    default=None,
+    help='Set the number of shots for stochastic noise simulation (defaults to analytic expectation).',
+)
 training_settings = [{'nEpochs': 251, 'start_epoch': 1}]
 
 def validate(val_gen, model, epoch, best_loss_r2):
@@ -100,7 +116,18 @@ if __name__ == '__main__':
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    model = Net.make_model().to(device)
+    noise_config = parse_noise_spec(opt.noise)
+    if noise_config is not None:
+        if opt.noise_device is not None:
+            noise_config.setdefault('device', opt.noise_device)
+        if opt.noise_shots is not None:
+            noise_config.setdefault('shots', opt.noise_shots)
+
+    model = Net.make_model(
+        noise_config=noise_config,
+        quantum_device=opt.noise_device,
+        shots=opt.noise_shots,
+    ).to(device)
     num_epoch = training_settings[0]['nEpochs']
 
     optimizer = optim.AdamW(model.parameters(), lr=opt.lr, weight_decay=0.0001)
