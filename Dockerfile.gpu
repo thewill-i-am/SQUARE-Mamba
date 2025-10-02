@@ -9,8 +9,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update && apt-get install --no-install-recommends -y \
-        python3 python3-venv python3-pip python3-dev \
-        build-essential git libopenblas-dev \
+    python3 \
+    python3-venv \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    git \
+    libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --upgrade pip
@@ -18,10 +23,12 @@ RUN python3 -m pip install --upgrade pip
 RUN pip install --extra-index-url https://download.pytorch.org/whl/cu121 \
     torch torchvision torchaudio
 
-COPY requirements-gpu.txt ./
-RUN pip install -r requirements-gpu.txt
+COPY requirements.txt ./
+RUN pip install -r requirements.txt
+RUN pip install mamba-ssm==2.2.5  # Install mamba-ssm for GPU support
 
 COPY . .
+
 ENV PYTHONPATH=/app
 
 CMD ["python3", "SQUARE_Mamba/demo.py", "--mode", "SQUARE-Mamba", "--skip-test", "--no-plot"]
