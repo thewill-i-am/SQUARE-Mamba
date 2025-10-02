@@ -1,8 +1,9 @@
 # Core dependencies for the SQUARE-Mamba demo and training scripts
-numpy
+numpy==1.26.4
 pandas
 scikit-learn
 torch
+#torch==2.1.0+cu121
 pennylane
 mamba-ssm
 einops
