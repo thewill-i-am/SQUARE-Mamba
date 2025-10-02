@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -48,7 +49,17 @@ if __name__ == '__main__':
   gt_csv = pd.DataFrame(gt_test.reshape(-1, 1))
   prediction_csv = pd.DataFrame(prediction.reshape(-1, 1))
 
-  result_dir = BASE_DIR / "Result" / "SQUARE_Mamba_Not_Quantum"
+  # Generar timestamp para el nombre de la carpeta
+  timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+  
+  result_dir = BASE_DIR / "Result" / f"SQUARE_Mamba_Not_Quantum_{timestamp}"
   result_dir.mkdir(parents=True, exist_ok=True)
+  
+  # Guardar archivos con nombres originales
   gt_csv.to_csv(result_dir / "gt_Pooncarie.csv", header=None, index=False)
   prediction_csv.to_csv(result_dir / "prediction_Pooncarie.csv", header=None, index=False)
+  
+  print(f"✅ Resultados guardados (Not Quantum):")
+  print(f"   Ground Truth: gt_Pooncarie.csv")
+  print(f"   Predicción:   prediction_Pooncarie.csv")
+  print(f"   Directorio:   {result_dir}")

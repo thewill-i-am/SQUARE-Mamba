@@ -1,7 +1,9 @@
 import argparse
 import os
 import sys
+import platform
 from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -51,13 +53,28 @@ def validate(val_gen, model, epoch, best_loss_r2):
         
         print("R² actual: {:.6f}".format(val_loss_r2))
         print("R² histórico mejor: {:.6f}".format(best_loss_r2))
-        os.makedirs("./my_checkpoints", exist_ok=True)
-        torch.save(model.state_dict(), "./my_checkpoints/SQUARE_Mamba_new.pkl")
-        print("Modelo guardado en epoca {}".format(epoch))
+        
+        # Generar timestamp y nombre de usuario
+        timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+        username = os.getlogin()
+        checkpoint_name = f"SQUARE_Mamba_{timestamp}-{username}.pkl"
+        
+        checkpoint_dir = Path("./checkpoint")
+        checkpoint_dir.mkdir(exist_ok=True)
+        checkpoint_path = checkpoint_dir / checkpoint_name
+        
+        torch.save(model.state_dict(), checkpoint_path)
+        print(f"Modelo guardado en época {epoch}: {checkpoint_name}")
 
         if best_loss_r2 < val_loss_r2:
             best_loss_r2 = val_loss_r2
-            print("Nuevo record de R²: {:.6f}".format(val_loss_r2))
+            print("🎯 Nuevo record de R²: {:.6f}".format(val_loss_r2))
+            
+            # Guardar el mejor modelo con sufijo especial
+            best_checkpoint_name = f"SQUARE_Mamba_BEST_{timestamp}-{username}.pkl"
+            best_checkpoint_path = checkpoint_dir / best_checkpoint_name
+            torch.save(model.state_dict(), best_checkpoint_path)
+            print(f"💾 Mejor modelo guardado: {best_checkpoint_name}")
 
     return val_loss, best_loss_r2
 
@@ -119,3 +136,14 @@ if __name__ == '__main__':
             valloss, best_loss_r2 = validate(valloader, model, epoch, best_loss_r2)
             Val_Loss_list.append(valloss.item())
         scheduler.step()
+    
+    # Guardar checkpoint final al completar entrenamiento
+    final_timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+    final_username = os.getlogin()
+    final_checkpoint_name = f"SQUARE_Mamba_FINAL_{final_timestamp}-{final_username}.pkl"
+    final_checkpoint_path = Path("./checkpoint") / final_checkpoint_name
+    
+    torch.save(model.state_dict(), final_checkpoint_path)
+    print(f"🏁 Entrenamiento completado. Modelo final guardado: {final_checkpoint_name}")
+    print(f"📊 Mejor R² obtenido: {best_loss_r2:.6f}")
+    print(f"📁 Checkpoints guardados en: {Path('./checkpoint').resolve()}")

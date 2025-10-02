@@ -63,15 +63,34 @@ def run_test_script(base_path: Path, mode_key: str) -> None:
 
 
 def load_series(base_path: Path, mode_key: str) -> Tuple[List[float], List[float]]:
-    result_dir = base_path / "main" / "Result" / mode_key
+    result_base_dir = base_path / "main" / "Result"
+    
+    # Buscar carpetas que coincidan con el patrón del modo
+    pattern = f"{mode_key}_*"
+    matching_dirs = list(result_base_dir.glob(pattern))
+    
+    if not matching_dirs:
+        raise FileNotFoundError(
+            f"No se encontraron carpetas de resultados para el modo '{mode_key}'. "
+            f"Busque carpetas con patrón '{pattern}' en {result_base_dir}. "
+            f"Ejecute primero el script de test correspondiente."
+        )
+    
+    # Ordenar por fecha (la más reciente primero) basándose en el timestamp en el nombre
+    matching_dirs.sort(key=lambda p: p.name, reverse=True)
+    result_dir = matching_dirs[0]
+    
+    print(f"[demo] Usando carpeta de resultados más reciente: {result_dir.name}")
+    
     gt_path = result_dir / "gt_Pooncarie.csv"
     pred_path = result_dir / "prediction_Pooncarie.csv"
 
-    print("hola")
-    print(pred_path)
     if not gt_path.exists() or not pred_path.exists():
         raise FileNotFoundError(
-            "Result files not found. Run the test script first or use --skip-test only when files already exist."
+            f"Archivos de resultados faltantes en {result_dir}:\n"
+            f"  - gt_Pooncarie.csv: {'✓' if gt_path.exists() else '✗'}\n"
+            f"  - prediction_Pooncarie.csv: {'✓' if pred_path.exists() else '✗'}\n"
+            f"Ejecute primero el script de test correspondiente."
         )
 
     def read_column(path: Path) -> List[float]:

@@ -109,7 +109,7 @@ python SQUARE_Mamba/demo.py --mode "SQUARE-Mamba"
 python SQUARE_Mamba/demo.py \
     --mode "SQUARE-Mamba" \
     --skip-test \
-    --save-plot exports/quantum_plot_Montevideo-JA.png \
+    --save-plot exports/quantum_plot_Montevideo-JA_9datos.png \
     --no-plot
 
 # Classical "Not Quantum" variant
