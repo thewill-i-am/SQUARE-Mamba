@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -15,6 +16,14 @@ if str(BASE_DIR) not in sys.path:
 from functions.util import Create_dataset, load_data
 from networks.SQUARE_Mamba_Not_Quantum import SQUARE_Mamba
 
+# Parser de argumentos
+parser = argparse.ArgumentParser(description="Test SQUARE_Mamba_Not_Quantum model")
+parser.add_argument(
+    "--checkpoint", 
+    type=str, 
+    required=True,
+    help="Nombre del archivo checkpoint (.pkl) a cargar desde la carpeta checkpoint/"
+)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -31,6 +40,9 @@ def test(test_gen, model):
 
 
 if __name__ == '__main__':
+  # Parsear argumentos
+  args = parser.parse_args()
+  
   model = SQUARE_Mamba(in_channel=105)
   model = model.to(device)
 
@@ -38,9 +50,24 @@ if __name__ == '__main__':
   testing_data, testing_gt = Create_dataset(data_Pooncarie, gt_Pooncarie, num_sample=201)
   testloader = DataLoader(testing_data, batch_size=201, shuffle=False)
 
+  # Cargar checkpoint especificado por argumento
   checkpoint_dir = BASE_DIR / "checkpoint"
-  checkpoint_path = checkpoint_dir / "SQUARE_Mamba_Not_Quantum.pkl"
+  checkpoint_path = checkpoint_dir / args.checkpoint
+  
+  # Verificar que el archivo existe
+  if not checkpoint_path.exists():
+    print(f"❌ Error: No se encontró el checkpoint: {checkpoint_path}")
+    print(f"📁 Archivos disponibles en {checkpoint_dir}:")
+    if checkpoint_dir.exists():
+      for pkl_file in checkpoint_dir.glob("*.pkl"):
+        print(f"   - {pkl_file.name}")
+    else:
+      print("   (El directorio checkpoint no existe)")
+    sys.exit(1)
+  
+  print(f"📂 Cargando checkpoint: {args.checkpoint}")
   model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+  print(f"✅ Modelo cargado exitosamente")
 
   prediction_temp = test(testloader, model)
   gt_test = testing_gt[8:201, 4]
