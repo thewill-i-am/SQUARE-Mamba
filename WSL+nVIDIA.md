@@ -1,12 +1,14 @@
 # Installing WSL
 
-````bat
+En caso de querrer correrlo sin nVIDIA GPU se debe comentar en requirements.txt la linea de mamba-ssm e ignorar la sección de CUDA.
+
+```bat
 wsl --install Ubuntu-22.04
 ```
 
 Ubuntu as default distro can be changed by:
 
-````bat
+```bat
 wsl --set-default Ubuntu-22.04
 ```
 
