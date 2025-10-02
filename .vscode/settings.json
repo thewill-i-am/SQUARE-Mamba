@@ -1,0 +1,7 @@
+{
+    // Ruta al intérprete de Python dentro del entorno virtual
+    "python.defaultInterpreterPath": "./.venv-3.10/bin/python3",
+    // Para activar el entorno virtual automáticamente al abrir una terminal integrada
+    "python.terminal.activateEnvironment": true,
+    // Configuración adicional para asegurar que use este entorno
+}

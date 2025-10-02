@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "qbraid.qbraid-environment-manager",
+    "qbraid.quantum-console",
+    "ms-python.python",
+    "ms-toolsai.jupyter",
+  ]
+}
