@@ -2,17 +2,28 @@ import torch
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pandas as pd
+from pathlib import Path
+
+
+_BASE_DIR = Path(__file__).resolve().parent.parent
+_DATA_DIR = _BASE_DIR / "CRU_data_montevideo"
+
+
+def _read(feature: str, start_point: int, end_point: int) -> np.ndarray:
+  path = _DATA_DIR / f"{feature}.csv"
+  df = pd.read_csv(path, header=None)
+  return df.iloc[start_point:end_point, :9].values.astype('float32')
 
 def load_data(start_point, end_point):
   
-  cld = pd.read_csv("./CRU_data_montevideo/cld.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  tmn = pd.read_csv("./CRU_data_montevideo/tmn.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  tmp = pd.read_csv("./CRU_data_montevideo/tmp.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  tmx = pd.read_csv("./CRU_data_montevideo/tmx.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  vap = pd.read_csv("./CRU_data_montevideo/vap.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  pet = pd.read_csv("./CRU_data_montevideo/pet.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  pre = pd.read_csv("./CRU_data_montevideo/pre.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  GT = pd.read_csv("./CRU_data_montevideo/spei.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
+  cld = _read("cld", start_point, end_point)
+  tmn = _read("tmn", start_point, end_point)
+  tmp = _read("tmp", start_point, end_point)
+  tmx = _read("tmx", start_point, end_point)
+  vap = _read("vap", start_point, end_point)
+  pet = _read("pet", start_point, end_point)
+  pre = _read("pre", start_point, end_point)
+  GT = _read("spei", start_point, end_point)
   data = np.concatenate((cld.reshape(-1, 9, 1), tmn.reshape(-1, 9, 1), tmp.reshape(-1, 9, 1), tmx.reshape(-1, 9, 1), vap.reshape(-1, 9, 1), pet.reshape(-1, 9, 1), pre.reshape(-1, 9, 1)), axis = 2)
 
   return data, GT

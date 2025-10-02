@@ -1,13 +1,10 @@
-numpy
-#numpy==1.24.3
+numpy==1.26.4
 pandas
 scikit-learn
-torch==2.2.1
+torch==1.13.1
 einops
 matplotlib
 tqdm
-#installed torch-2.1.0 torchaudio-2.1.0 torchvision-0.16.0           
-pennylane
+pennylane=0.38.0
 mamba-ssm
 pymupdf
-#Successfully installed tokenizers-0.13.3 transformers-4.30.0                                                                                                   
