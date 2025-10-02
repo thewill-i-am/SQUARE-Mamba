@@ -32,7 +32,8 @@ if __name__ == '__main__':
   testing_data, testing_gt = Create_dataset(data_Pooncarie, gt_Pooncarie, num_sample=201)
   testloader = DataLoader(testing_data, batch_size=201, shuffle=False)
     
-  folder_path = "./checkpoint/SQUARE_Mamba.pkl"
+  #folder_path = "./checkpoint/SQUARE_Mamba.pkl"
+  folder_path = "./checkpoint/SQUARE_Mamba_final_20251001_192812.pkl"
   model.load_state_dict(torch.load(folder_path, map_location=device))
   prediction_temp = test(testloader, model)
   gt_test = testing_gt[8:201, 4]

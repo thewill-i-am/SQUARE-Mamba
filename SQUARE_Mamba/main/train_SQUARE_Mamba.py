@@ -40,17 +40,24 @@ def validate(val_gen, model, epoch, best_loss_r2):
             loss = loss_function(gt, spei)
 
             val_loss_list.append(loss.item())
-            val_loss = np.array(val_loss_list).mean()
-
             loss_r2 = r_square(gt, spei)
             val_loss_list_r2.append(loss_r2.item())
-            val_loss_r2 = np.array(val_loss_list_r2).mean()
+            
+            print("===>Epoch{} Part: Validation loss is :{:4f}".format(epoch, np.array(val_loss_list).mean()))
 
-            print("===>Epoch{} Part: Validation loss is :{:4f}" .format(epoch, val_loss))
+        # MOVER TODO ESTO FUERA DEL BUCLE FOR:
+        val_loss = np.array(val_loss_list).mean()
+        val_loss_r2 = np.array(val_loss_list_r2).mean()
+        
+        print("R² actual: {:.6f}".format(val_loss_r2))
+        print("R² histórico mejor: {:.6f}".format(best_loss_r2))
+        os.makedirs("./my_checkpoints", exist_ok=True)
+        torch.save(model.state_dict(), "./my_checkpoints/SQUARE_Mamba_new.pkl")
+        print("Modelo guardado en epoca {}".format(epoch))
 
         if best_loss_r2 < val_loss_r2:
             best_loss_r2 = val_loss_r2
-            torch.save(model.state_dict(), "./checkpoint/SQUARE_Mamba.pkl")
+            print("Nuevo record de R²: {:.6f}".format(val_loss_r2))
 
     return val_loss, best_loss_r2
 

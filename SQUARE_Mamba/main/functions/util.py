@@ -5,15 +5,15 @@ import pandas as pd
 
 def load_data(start_point, end_point):
   
-  cld = pd.read_csv("./CRU_data/cld.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  tmn = pd.read_csv("./CRU_data/tmn.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  tmp = pd.read_csv("./CRU_data/tmp.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  tmx = pd.read_csv("./CRU_data/tmx.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  vap = pd.read_csv("./CRU_data/vap.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  pet = pd.read_csv("./CRU_data/pet.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
-  pre = pd.read_csv("./CRU_data/pre.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
+  cld = pd.read_csv("./CRU_data_montevideo/cld.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
+  tmn = pd.read_csv("./CRU_data_montevideo/tmn.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
+  tmp = pd.read_csv("./CRU_data_montevideo/tmp.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
+  tmx = pd.read_csv("./CRU_data_montevideo/tmx.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
+  vap = pd.read_csv("./CRU_data_montevideo/vap.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
+  pet = pd.read_csv("./CRU_data_montevideo/pet.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
+  pre = pd.read_csv("./CRU_data_montevideo/pre.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
+  GT = pd.read_csv("./CRU_data_montevideo/spei.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
   data = np.concatenate((cld.reshape(-1, 9, 1), tmn.reshape(-1, 9, 1), tmp.reshape(-1, 9, 1), tmx.reshape(-1, 9, 1), vap.reshape(-1, 9, 1), pet.reshape(-1, 9, 1), pre.reshape(-1, 9, 1)), axis = 2)
-  GT = pd.read_csv("./CRU_data/spei.csv", header=None).iloc[start_point:end_point, :9].values.astype('float32')
 
   return data, GT
       

@@ -127,9 +127,9 @@ def qnn(embedding, p, cp):
     qml.RY(p[2, ws[1]], wires = ws[1])
     qml.RY(p[2, ws[2]], wires = ws[2])
 
-    qml.MultiControlledX(control_wires=[ws[0],ws[1]], wires=ws[2], control_values="10")
-    qml.MultiControlledX(control_wires=[ws[1],ws[2]], wires=ws[0], control_values="10")
-    qml.MultiControlledX(control_wires=[ws[2],ws[0]], wires=ws[1], control_values="10")
+    qml.ctrl(qml.PauliX, control=[ws[0], ws[1]], control_values="10")(ws[2])
+    qml.ctrl(qml.PauliX, control=[ws[1], ws[2]], control_values="10")(ws[0])
+    qml.ctrl(qml.PauliX, control=[ws[2], ws[0]], control_values="10")(ws[1])
 
   exp_vals_z = [qml.expval(qml.PauliZ(w)) for w in measure_set]
   return exp_vals_z
