@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import pennylane as qml
 from mamba_ssm import Mamba
+from qbraid.runtime import QbraidProvider
 from einops import rearrange
 import sys
 
@@ -13,7 +14,8 @@ os.chdir(file_path)
 def make_model():
   return SQUARE_Mamba(in_channel=105)
 
-dev = qml.device("default.qubit", wires=3)
+provider = QbraidProvider(api_key=os.environ.get("QBRAID_API_KEY"))
+dev = provider.get_device('qbraid_qir_simulator')
 
 def map_generation(spei_tensor, channels):
 
