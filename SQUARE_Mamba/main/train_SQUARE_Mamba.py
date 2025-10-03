@@ -1,9 +1,9 @@
 import argparse
+import datetime
+import getpass
 import os
 import sys
-import platform
 from pathlib import Path
-from datetime import datetime
 
 import numpy as np
 import torch
@@ -28,6 +28,10 @@ parser.add_argument("--start_epoch", type=int, default=1, help="Start epoch from
 parser.add_argument('--model', default='SQUARE_Mamba', type=str, help='Import which network')
 parser.add_argument('--lr', default=1e-3, help='initial learning rate')
 parser.add_argument('--epochs', type=int, help='Override the default epoch count (251).')
+parser.add_argument("--data-dir", type=str, default="CRU_data",help="Directorio de datos (por defecto: CRU_data)")
+
+checkpoint_name = "SQUARE_Mamba.pkl"
+
 training_settings = [{'nEpochs': 251, 'start_epoch': 1}]
 
 def validate(val_gen, model, epoch, best_loss_r2):
@@ -53,28 +57,13 @@ def validate(val_gen, model, epoch, best_loss_r2):
         
         print("R² actual: {:.6f}".format(val_loss_r2))
         print("R² histórico mejor: {:.6f}".format(best_loss_r2))
-        
-        # Generar timestamp y nombre de usuario
-        timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-        username = os.getlogin()
-        checkpoint_name = f"SQUARE_Mamba_{timestamp}-{username}.pkl"
-        
-        checkpoint_dir = Path("./checkpoint")
-        checkpoint_dir.mkdir(exist_ok=True)
-        checkpoint_path = checkpoint_dir / checkpoint_name
-        
-        torch.save(model.state_dict(), checkpoint_path)
-        print(f"Modelo guardado en época {epoch}: {checkpoint_name}")
+        os.makedirs("./checkpoint", exist_ok=True)
+        torch.save(model.state_dict(), f"./checkpoint/{checkpoint_name}")
+        print("Modelo guardado en epoca {}".format(epoch))
 
         if best_loss_r2 < val_loss_r2:
             best_loss_r2 = val_loss_r2
-            print("🎯 Nuevo record de R²: {:.6f}".format(val_loss_r2))
-            
-            # Guardar el mejor modelo con sufijo especial
-            best_checkpoint_name = f"SQUARE_Mamba_BEST_{timestamp}-{username}.pkl"
-            best_checkpoint_path = checkpoint_dir / best_checkpoint_name
-            torch.save(model.state_dict(), best_checkpoint_path)
-            print(f"💾 Mejor modelo guardado: {best_checkpoint_name}")
+            print("Nuevo record de R²: {:.6f}".format(val_loss_r2))
 
     return val_loss, best_loss_r2
 
@@ -124,6 +113,11 @@ if __name__ == '__main__':
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, num_epoch*3, eta_min=1e-7)
     print("===> Loading model {} and criterion".format(opt.model))
 
+    # date  yyyy.mm.dd-HH.MM-mm
+    date = datetime.datetime.now().strftime("%Y.%m.%d-%H.%M-%S")
+    checkpoint_name = f"{opt.model}_{opt.data_dir}_{getpass.getuser()}_{date}.pkl"
+    print(f"Checkpoint name: {checkpoint_name}")
+
     opt.nEpochs = training_settings[0]['nEpochs']
     opt.start_epoch = training_settings[0]['start_epoch']
     trainloader = DataLoader(TensorDataset(training_dataset, train_gt[:, 4].reshape(-1, 1)), batch_size=315, shuffle=False)
@@ -137,13 +131,3 @@ if __name__ == '__main__':
             Val_Loss_list.append(valloss.item())
         scheduler.step()
     
-    # Guardar checkpoint final al completar entrenamiento
-    final_timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-    final_username = os.getlogin()
-    final_checkpoint_name = f"SQUARE_Mamba_FINAL_{final_timestamp}-{final_username}.pkl"
-    final_checkpoint_path = Path("./checkpoint") / final_checkpoint_name
-    
-    torch.save(model.state_dict(), final_checkpoint_path)
-    print(f"🏁 Entrenamiento completado. Modelo final guardado: {final_checkpoint_name}")
-    print(f"📊 Mejor R² obtenido: {best_loss_r2:.6f}")
-    print(f"📁 Checkpoints guardados en: {Path('./checkpoint').resolve()}")

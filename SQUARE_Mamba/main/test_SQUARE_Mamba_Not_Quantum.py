@@ -24,6 +24,7 @@ parser.add_argument(
     required=True,
     help="Nombre del archivo checkpoint (.pkl) a cargar desde la carpeta checkpoint/"
 )
+parser.add_argument("--data-dir", type=str, default=None,help="Directorio de datos (por defecto: CRU_data)")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -46,14 +47,18 @@ if __name__ == '__main__':
   model = SQUARE_Mamba(in_channel=105)
   model = model.to(device)
 
-  data_Pooncarie, gt_Pooncarie = load_data(1260, 1476)
+  data_Pooncarie, gt_Pooncarie = load_data(1260, 1476, args.data_dir)
   testing_data, testing_gt = Create_dataset(data_Pooncarie, gt_Pooncarie, num_sample=201)
   testloader = DataLoader(testing_data, batch_size=201, shuffle=False)
+
+  print (f" Dirección de datos: {args.data_dir if args.data_dir else 'CRU_data (por defecto)'}")
 
   # Cargar checkpoint especificado por argumento
   checkpoint_dir = BASE_DIR / "checkpoint"
   checkpoint_path = checkpoint_dir / args.checkpoint
   
+  print(f"🔍 Verificando checkpoint: {checkpoint_path}")
+
   # Verificar que el archivo existe
   if not checkpoint_path.exists():
     print(f"❌ Error: No se encontró el checkpoint: {checkpoint_path}")

@@ -1,9 +1,11 @@
 import argparse
+import getpass
 import os
 import sys
 from pathlib import Path
 
 import numpy as np
+from tomlkit import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -27,11 +29,16 @@ parser.add_argument('--model', default='SQUARE_Mamba', type=str, help='Import wh
 parser.add_argument('--lr', default=1e-4, help='initial learning rate (reduced from 1e-3)')
 parser.add_argument('--epochs', type=int, help='Override the default epoch count (251).')
 parser.add_argument('--patience', type=int, default=20, help='Early stopping patience')
+parser.add_argument("--data-dir", type=str, default=None,help="Directorio de datos (por defecto: CRU_data)")
 training_settings = [{'nEpochs': 251, 'start_epoch': 1}]
 
 def validate(val_gen, model, epoch, best_loss_r2, best_checkpoint_path):
     model.eval()
     val_loss_list, val_loss_list_r2 = [], []
+
+    timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+    username = getpass.getuser()
+    checkpoint_name = f"SQUARE_Mamba_{timestamp}-{username}.pkl"
 
     with torch.no_grad():
         for iteration, (Data, gt) in tqdm(enumerate(val_gen)):
@@ -54,7 +61,7 @@ def validate(val_gen, model, epoch, best_loss_r2, best_checkpoint_path):
         
         # Save current model (always save for recovery)
         os.makedirs("./checkpoint", exist_ok=True)
-        current_checkpoint = f"./checkpoint/SQUARE_Mamba_montevideo_epoch_{epoch}.pkl"
+        current_checkpoint = f"./checkpoint/{checkpoint_name}"
         torch.save(model.state_dict(), current_checkpoint)
         
         # Save best model only if it improves
@@ -96,12 +103,17 @@ def train(train_gen, model, optimizer, epoch):
     return train_loss
 
 if __name__ == '__main__':
-    training_data, gt_training = load_data(0, 960)
-    validation_data, gt_validation = load_data(960, 1260)
+    opt = parser.parse_args()
+    
+    training_data, gt_training = load_data(0, 960, opt.data_dir)
+    validation_data, gt_validation = load_data(960, 1260, opt.data_dir)
     training_dataset, train_gt = Create_dataset(training_data, gt_training, num_sample=945)
     validation_dataset, val_gt = Create_dataset(validation_data, gt_validation, num_sample=285)
 
     loss_function = nn.MSELoss()
+    Loss_list, Val_Loss_list, best_loss_r2 = [], [], -999
+    if opt.epochs is not None:
+        training_settings[0]['nEpochs'] = opt.epochs
     Loss_list, Val_Loss_list, best_loss_r2 = [], [], -999
     
     opt = parser.parse_args()

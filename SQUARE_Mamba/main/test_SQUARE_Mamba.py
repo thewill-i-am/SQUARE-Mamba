@@ -24,6 +24,12 @@ parser.add_argument(
     required=True,
     help="Nombre del archivo checkpoint (.pkl) a cargar desde la carpeta checkpoint/"
 )
+parser.add_argument(
+    "--data-dir", 
+    type=str, 
+    default=None,
+    help="Directorio de datos (por defecto: CRU_data)"
+)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -46,7 +52,7 @@ if __name__ == '__main__':
   model = SQUARE_Mamba(in_channel=105)
   model = model.to(device)
 
-  data_Pooncarie, gt_Pooncarie = load_data(1260, 1476)
+  data_Pooncarie, gt_Pooncarie = load_data(1260, 1476, args.data_dir)
   testing_data, testing_gt = Create_dataset(data_Pooncarie, gt_Pooncarie, num_sample=201)
   testloader = DataLoader(testing_data, batch_size=201, shuffle=False)
 

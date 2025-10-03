@@ -1,0 +1,32 @@
+# Instalación de dependencias qBraid
+# Basado en la salida de pip install qbraid-cli
+
+# Paquetes principales qBraid
+qbraid-cli==0.10.7
+qbraid-core==0.1.41
+
+# Dependencias de CLI y UI
+click==8.1.8
+rich==14.1.0
+typer==0.19.2
+shellingham==1.5.4
+
+# Dependencias de rendering y formato
+pygments==2.19.2
+markdown-it-py==4.0.0
+mdurl==0.1.2
+
+# Dependencias de seguridad (ya satisfechas)
+# certifi>=2017.4.17 (ya instalado: 2025.8.3)
+
+# Comando de instalación completo:
+# pip install qbraid-cli
+
+# Verificación de instalación:
+# qbraid --version
+# qbraid devices list
+
+# Notas de instalación:
+# - Total descargado: ~1.7 MB
+# - Compatible con Python 3.10
+# - Requiere configuración de API key: QBRAID_API_KEY

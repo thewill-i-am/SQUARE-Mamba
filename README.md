@@ -8,6 +8,25 @@ The code base provides:
 - A Python demo (`SQUARE_Mamba/demo.py`) that replicates the MATLAB demo, prints evaluation metrics, and can render or save plots.
 - Docker recipes for both CPU-only deployment and CUDA-enabled GPU training.
 
+## Quick Start
+
+```bash
+# 1. Setup environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Train models
+python SQUARE_Mamba/main/train_SQUARE_Mamba.py
+python SQUARE_Mamba/main/train_SQUARE_Mamba_Not_Quantum.py
+
+# 3. Test with best checkpoint (replace with actual filename)
+python SQUARE_Mamba/main/test_SQUARE_Mamba.py --checkpoint SQUARE_Mamba_BEST_2025.10.02_14.30.22-ubuntu.pkl
+
+# 4. Run demo
+python SQUARE_Mamba/demo.py --mode SQUARE-Mamba
+```
+
 ## Repository Layout
 
 ```text
@@ -64,7 +83,7 @@ The training and testing scripts set this automatically, but it is useful to rem
 
 ## Training
 
-Two training scripts are available:
+Two training scripts are available with enhanced checkpoint management:
 
 ```bash
 # Quantum-enhanced SQUARE-Mamba
@@ -72,38 +91,62 @@ python SQUARE_Mamba/main/train_SQUARE_Mamba.py
 
 # Classical ablation without QLTEM
 python SQUARE_Mamba/main/train_SQUARE_Mamba_Not_Quantum.py
+
+# Using custom data directory
+python SQUARE_Mamba/main/train_SQUARE_Mamba.py --data-dir CRU_data_montevideo
 ```
 
 Both scripts:
 - Detect the best available device (`cuda`, `mps`, or `cpu`).
-- Save checkpoints into `SQUARE_Mamba/main/checkpoint/` (files ending with `_cpu.pt`).
-- Print training/validation losses every epoch.
+- Save timestamped checkpoints into `SQUARE_Mamba/main/checkpoint/` with format: `<model>_yyyy.mm.dd_hh.mm.ss-<username>.pkl`
+- Generate three types of checkpoints:
+  - **Regular**: Saved each epoch for progress tracking
+  - **BEST**: Saved when validation R² improves (suffix `_BEST_`)
+  - **FINAL**: Saved at training completion (suffix `_FINAL_`)
+- Print training/validation losses and R² scores every epoch.
+- Support custom data directories via `--data-dir` parameter.
 
 ## Testing / Inference
 
 After training, generate CSV outputs with:
 
 ```bash
-python SQUARE_Mamba/main/test_SQUARE_Mamba.py
-python SQUARE_Mamba/main/test_SQUARE_Mamba_Not_Quantum.py
+python SQUARE_Mamba/main/test_SQUARE_Mamba.py --checkpoint SQUARE_Mamba_BEST_2025.10.02_14.30.22-ubuntu.pkl
+python SQUARE_Mamba/main/test_SQUARE_Mamba_Not_Quantum.py --checkpoint SQUARE_Mamba_Not_Quantum_BEST_2025.10.02_16.22.15-ubuntu.pkl
+
+# Using custom data directory
+python SQUARE_Mamba/main/test_SQUARE_Mamba.py --checkpoint model.pkl --data-dir CRU_data_montevideo
 ```
 
-Each script loads the matching checkpoint (if present) and writes:
-- `SQUARE_Mamba/main/Result/<MODE>/gt_Pooncarie.csv`
-- `SQUARE_Mamba/main/Result/<MODE>/prediction_Pooncarie.csv`
+Each script:
+- **Requires** a `--checkpoint` parameter specifying the exact `.pkl` file to load
+- Supports `--data-dir` parameter for custom data directories
+- Writes timestamped results to: `SQUARE_Mamba/main/Result/<MODE>_yyyy-mm-dd_hh-mm-ss/`
+  - `gt_Pooncarie.csv` (ground truth)
+  - `prediction_Pooncarie.csv` (model predictions)
+- Lists available checkpoints if the specified file is not found
 
-If a checkpoint is missing, the script will emit a warning and proceed with randomly initialised weights.
+### Checkpoint Management
+
+Training generates organized checkpoints:
+```
+checkpoint/
+├── SQUARE_Mamba_2025.10.02_14.30.22-ubuntu.pkl     # Regular checkpoint
+├── SQUARE_Mamba_BEST_2025.10.02_14.35.42-ubuntu.pkl # Best validation R²
+├── SQUARE_Mamba_FINAL_2025.10.02_15.45.33-ubuntu.pkl # Training completion
+└── SQUARE_Mamba_Not_Quantum_BEST_2025.10.02_16.22.15-ubuntu.pkl
+```
 
 ## Demo & Plotting
 
-The MATLAB demo workflow is reproduced in `demo.py`:
+The MATLAB demo workflow is reproduced in `demo.py` with automatic result detection:
 
 ```bash
-# Reuse existing CSVs and skip plotting
-python SQUARE_Mamba/demo.py --skip-test --no-plot
-
-# Regenerate outputs and display the plot window
+# Automatically finds the most recent result folder and displays plot
 python SQUARE_Mamba/demo.py --mode "SQUARE-Mamba"
+
+# Skip test execution and use existing results
+python SQUARE_Mamba/demo.py --skip-test --mode "SQUARE-Mamba" 
 
 # Save the figure as an image (headless)
 python SQUARE_Mamba/demo.py \
@@ -120,7 +163,38 @@ python SQUARE_Mamba/demo.py \
     --no-plot
 ```
 
+The demo automatically:
+- Searches for result folders matching the selected mode (e.g., `SQUARE_Mamba_2025-10-02_14-30-22/`)
+- Uses the most recent timestamped folder
+- Provides clear error messages if no results are found
+- Displays comprehensive metrics: MAE, RMSE, R², and Pearson correlation
+
 The plotting routine now uses the built-in `DejaVu Serif` font so it works out of the box in slim Docker images. When `--save-plot` is provided, Matplotlib switches to the non-interactive Agg backend so plots can be generated in headless environments.
+
+## Enhanced Features
+
+### Flexible Data Loading
+- Configurable data directories via `--data-dir` parameter
+- Default: `CRU_data`, customizable to any directory
+- Automatic validation with helpful error messages
+
+### Advanced Checkpoint Management
+- **Timestamped naming**: `<model>_yyyy.mm.dd_hh.mm.ss-<username>.pkl`
+- **User identification**: Checkpoints tagged with system username
+- **Multiple checkpoint types**:
+  - Regular: Saved each epoch for progress tracking
+  - BEST: Saved when validation metrics improve
+  - FINAL: Saved upon training completion
+
+### Organized Result Storage
+- **Timestamped result folders**: `<MODE>_yyyy-mm-dd_hh-mm-ss/`
+- **Automatic folder detection**: Demo finds most recent results
+- **History preservation**: All experiments are retained chronologically
+
+### Improved Error Handling
+- Clear checkpoint validation with available file listings
+- Data directory existence checking
+- Comprehensive error messages for troubleshooting
 
 ## Docker Usage
 
@@ -155,7 +229,24 @@ The GPU recipe installs CUDA-enabled `torch/torchvision/torchaudio` and then the
 | `Times New Roman` font warning while plotting | `demo.py` now defaults to `DejaVu Serif`. If you prefer the original font, install it inside your environment or adjust the font names in the script. |
 | PennyLane + MPS crash on macOS | Ensure `TORCH_MPS_DISABLE=1` is set (already done in scripts) or run on CPU. The bundled QLTEM implementation is fully PyTorch-based to avoid this path. |
 | Building Docker GPU image fails | The GPU image requires Linux with an NVIDIA GPU and the `nvidia/cuda` base image. On macOS/Windows use `Dockerfile.cpu` instead. |
-| No checkpoints found | Run the corresponding `train_*.py` scripts first so checkpoint files are produced in `SQUARE_Mamba/main/checkpoint/`. |
+| Checkpoint not found error | Use `--checkpoint` parameter with exact filename. Scripts will list available checkpoints if the specified file doesn't exist. |
+| No result folders found in demo | Run the corresponding test scripts first to generate timestamped result folders in `SQUARE_Mamba/main/Result/`. |
+| Custom data directory not found | Ensure the directory exists and contains required CSV files (cld.csv, tmn.csv, tmp.csv, tmx.csv, vap.csv, pet.csv, pre.csv, spei.csv). |
+
+### Working with Custom Data
+
+When using `--data-dir`, ensure your directory contains all required CSV files:
+```
+your_custom_data/
+├── cld.csv      # Cloud cover
+├── tmn.csv      # Temperature minimum  
+├── tmp.csv      # Temperature average
+├── tmx.csv      # Temperature maximum
+├── vap.csv      # Vapor pressure
+├── pet.csv      # Potential evapotranspiration
+├── pre.csv      # Precipitation
+└── spei.csv     # SPEI target values
+```
 
 ## Contributing
 

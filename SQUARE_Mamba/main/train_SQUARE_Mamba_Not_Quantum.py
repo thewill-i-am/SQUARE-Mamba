@@ -1,7 +1,7 @@
 import argparse
+import getpass
 import os
 import sys
-import platform
 from pathlib import Path
 from datetime import datetime
 
@@ -28,6 +28,12 @@ parser.add_argument("--start_epoch", type=int, default=1, help="Start epoch from
 parser.add_argument('--model', default='SQUARE_Mamba_Not_Quantum', type=str, help='Import which network')
 parser.add_argument('--lr', default=1e-3, help='initial learning rate')
 parser.add_argument('--epochs', type=int, help='Override the default epoch count (251).')
+parser.add_argument(
+    "--data-dir", 
+    type=str, 
+    default=None,
+    help="Directorio de datos (por defecto: CRU_data)"
+)
 training_settings = [{'nEpochs': 251, 'start_epoch': 1}]
 
 def validate(val_gen, model, epoch, best_loss_r2):
@@ -101,12 +107,17 @@ def train(train_gen, model, optimizer, epoch):
     return train_loss
 
 if __name__ == '__main__':
-    training_data, gt_training = load_data(0, 960)
-    validation_data, gt_validation = load_data(960, 1260)
+    opt = parser.parse_args()
+    
+    training_data, gt_training = load_data(0, 960, opt.data_dir)
+    validation_data, gt_validation = load_data(960, 1260, opt.data_dir)
     training_dataset, train_gt = Create_dataset(training_data, gt_training, num_sample=945)
     validation_dataset, val_gt = Create_dataset(validation_data, gt_validation, num_sample=285)
 
     loss_function = nn.MSELoss()
+    Loss_list, Val_Loss_list, best_loss_r2 = [], [], -999
+    if opt.epochs is not None:
+        training_settings[0]['nEpochs'] = opt.epochs
     Loss_list, Val_Loss_list, best_loss_r2 = [], [], -999
     opt = parser.parse_args()
     if opt.epochs is not None:
@@ -138,7 +149,7 @@ if __name__ == '__main__':
     
     # Guardar checkpoint final al completar entrenamiento
     final_timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-    final_username = os.getlogin()
+    final_username = getpass.getuser()
     final_checkpoint_name = f"SQUARE_Mamba_Not_Quantum_FINAL_{final_timestamp}-{final_username}.pkl"
     final_checkpoint_path = Path("./checkpoint") / final_checkpoint_name
     
