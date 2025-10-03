@@ -1,0 +1,4 @@
+/usr/local/lib/python3.10/dist-packages/pennylane/__init__.py:21: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+/app/SQUARE-Mamba/SQUARE_Mamba/main/functions/util.py:54: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at ../torch/csrc/utils/tensor_new.cpp:261.)
+  return torch.tensor(X).transpose(1, 2).float(), torch.tensor(gt).float()
