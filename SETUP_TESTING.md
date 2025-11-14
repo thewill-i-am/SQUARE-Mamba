@@ -1,12 +1,12 @@
-# Guía de Configuración y Pruebas
+# Setup and Testing Guide
 
-## Estado Actual
+## Current Status
 
-✅ **El código cuántico funciona correctamente**
+✅ **Quantum code is fully functional**
 
-El sistema está operativo con las siguientes configuraciones:
+The system is operational with the following configuration:
 
-### Entorno de Trabajo
+### Working Environment
 - **Python**: 3.10.13 (`.venv-3.10/`)
 - **PyTorch**: 2.2.1
 - **Qiskit**: 1.4.3
