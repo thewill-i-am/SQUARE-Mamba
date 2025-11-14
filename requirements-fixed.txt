@@ -1,0 +1,17 @@
+# Core dependencies - compatible versions
+numpy>=1.24.0,<2.0.0  # Qiskit no es compatible con numpy 2.x todavía
+pandas>=2.0.0
+torch>=2.0.0
+einops>=0.7.0
+tqdm>=4.65.0
+
+# Quantum computing stack
+qiskit>=1.0.0,<2.0.0
+qiskit-aer>=0.13.0
+qiskit-machine-learning>=0.7.0
+
+# Visualization (optional for testing)
+matplotlib>=3.7.0
+
+# Scientific computing
+scikit-learn>=1.3.0

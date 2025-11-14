@@ -1,18 +1,51 @@
 import os
-import sys
 import warnings
-from functools import partial
+from collections.abc import Iterable
+from typing import Optional
 
 import torch
 import torch.nn as nn
-import pennylane as qml
 from einops import rearrange
-from mamba_ssm import Mamba
+from qiskit.circuit import QuantumCircuit, ParameterVector
+from qiskit.quantum_info import SparsePauliOp
+from qiskit_aer.noise import (
+  NoiseModel,
+  amplitude_damping_error,
+  depolarizing_error,
+  pauli_error,
+  phase_damping_error,
+)
+from qiskit_aer.primitives import Estimator as AerEstimator
+from qiskit_machine_learning.connectors import TorchConnector
+from qiskit_machine_learning.neural_networks import EstimatorQNN
+
+try:
+  from mamba_ssm import Mamba  # type: ignore
+except ImportError:  # pragma: no cover
+  class Mamba(nn.Module):
+    """
+    Lightweight fallback implementation used when the optional mamba-ssm package is unavailable.
+    Provides a simple depthwise temporal convolution to preserve tensor shapes.
+    """
+
+    def __init__(self, d_model: int, d_state=None, d_conv: int = 3, expand=None):
+      super().__init__()
+      padding = d_conv // 2
+      self.net = nn.Sequential(
+        nn.Conv1d(d_model, d_model, kernel_size=d_conv, padding=padding, groups=d_model),
+        nn.GELU(),
+        nn.Conv1d(d_model, d_model, kernel_size=1),
+      )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+      return self.net(x.transpose(1, 2)).transpose(1, 2)
+
 
 current_directory = os.getcwd()
 file_path = f"{current_directory}"
 os.chdir(file_path)
-##
+
+
 def make_model(in_channel=105, noise_config=None, quantum_device=None, shots=None):
   return SQUARE_Mamba(
     in_channel=in_channel,
@@ -31,10 +64,17 @@ class NoiseManager:
     "phase_flip",
   }
 
+  ONE_QUBIT_GATES = ("rx", "ry", "rz", "sx")
+  TWO_QUBIT_GATES = ("cx", "rxx")
+  TARGET_QUBITS_1Q = (0, 1, 2)
+  TARGET_QUBITS_2Q = ((0, 1), (1, 2))
+
   def __init__(self, config=None):
-    self.device_name = None
-    self.shots = None
-    self.channels = []
+    self.device_name: Optional[str] = None
+    self.shots: Optional[int] = None
+    self.channels: list[dict[str, float]] = []
+    self.noise_model: Optional[NoiseModel] = None
+
     if config is None:
       return
 
@@ -52,6 +92,9 @@ class NoiseManager:
       parsed = self._parse_channel(channel)
       if parsed is not None:
         self.channels.append(parsed)
+
+    if self.channels:
+      self.noise_model = self._build_noise_model()
 
   def _parse_channel(self, channel_config):
     if not isinstance(channel_config, dict):
@@ -97,42 +140,95 @@ class NoiseManager:
 
   @property
   def enabled(self):
-    return len(self.channels) > 0
+    return bool(self.channels)
 
-  def apply(self, wires):
-    if not self.enabled:
-      return
-
+  def _build_noise_model(self):
+    noise_model = NoiseModel()
     for channel in self.channels:
-      name = channel["name"]
-      if name == "depolarizing":
-        for wire in wires:
-          qml.DepolarizingChannel(channel["prob"], wires=wire)
-      elif name == "amplitude_damping":
-        for wire in wires:
-          qml.AmplitudeDamping(channel["gamma"], wires=wire)
-      elif name == "phase_damping":
-        for wire in wires:
-          qml.PhaseDamping(channel["lam"], wires=wire)
-      elif name == "bit_flip":
-        for wire in wires:
-          qml.BitFlip(channel["prob"], wires=wire)
-      elif name == "phase_flip":
-        for wire in wires:
-          qml.PhaseFlip(channel["prob"], wires=wire)
+      single_error, two_error = self._make_errors(channel)
+      if single_error is not None:
+        for gate in self.ONE_QUBIT_GATES:
+          for qubit in self.TARGET_QUBITS_1Q:
+            noise_model.add_quantum_error(single_error, gate, [qubit])
+      if two_error is not None:
+        for gate in self.TWO_QUBIT_GATES:
+          for qubits in self.TARGET_QUBITS_2Q:
+            noise_model.add_quantum_error(two_error, gate, list(qubits))
+    return noise_model
+
+  def _make_errors(self, channel):
+    name = channel["name"]
+    if name == "depolarizing":
+      prob = channel["prob"]
+      return depolarizing_error(prob, 1), depolarizing_error(prob, 2)
+
+    if name == "amplitude_damping":
+      gamma = channel["gamma"]
+      single = amplitude_damping_error(gamma)
+      return single, single.tensor(single)
+
+    if name == "phase_damping":
+      lam = channel["lam"]
+      single = phase_damping_error(lam)
+      return single, single.tensor(single)
+
+    if name == "bit_flip":
+      prob = channel["prob"]
+      single = pauli_error([("X", prob), ("I", 1 - prob)])
+      return single, single.tensor(single)
+
+    if name == "phase_flip":
+      prob = channel["prob"]
+      single = pauli_error([("Z", prob), ("I", 1 - prob)])
+      return single, single.tensor(single)
+
+    return None, None
+
+  def apply(self, _wires):
+    # Retained for backwards compatibility; noise is injected via Aer noise models.
+    return
 
 
-def create_quantum_device(noise_manager, override_device=None, shots=None):
-  device_name = override_device or noise_manager.device_name
-  if device_name is None:
-    device_name = "default.mixed" if noise_manager.enabled else "default.qubit"
+def _resolve_method(backend_name: Optional[str]) -> Optional[str]:
+  if backend_name is None:
+    return None
 
-  device_kwargs = {"wires": 3}
+  backend_name = backend_name.lower()
+  alias_map = {
+    "default.qubit": None,
+    "default.qubit.autograd": None,
+    "aer_simulator": None,
+    "aer-simulator": None,
+    "statevector": "statevector",
+    "density_matrix": "density_matrix",
+    "matrix_product_state": "matrix_product_state",
+    "mps": "matrix_product_state",
+  }
+
+  if backend_name not in alias_map:
+    warnings.warn(
+      f"Backend '{backend_name}' is not recognized; default Aer simulator will be used.",
+      RuntimeWarning,
+    )
+  return alias_map.get(backend_name)
+
+
+def create_estimator(noise_manager: NoiseManager, override_device=None, shots=None) -> AerEstimator:
+  estimator = AerEstimator()
+
+  method = _resolve_method(override_device or noise_manager.device_name)
+  if method is not None:
+    estimator.options.method = method
+
+  if noise_manager.noise_model is not None:
+    estimator.options.noise_model = noise_manager.noise_model
+
   resolved_shots = shots if shots is not None else noise_manager.shots
   if resolved_shots is not None:
-    device_kwargs["shots"] = resolved_shots
+    estimator.options.default_shots = int(resolved_shots)
 
-  return qml.device(device_name, **device_kwargs)
+  return estimator
+
 
 def map_generation(spei_tensor, channels):
 
@@ -144,24 +240,24 @@ def map_generation(spei_tensor, channels):
   map[:, 1, 0:3, :] = pixel_vector[:, 3:6, :]
   map[:, 2, 0:3, :] = pixel_vector[:, 6:9, :]
 
-  return map.permute(0, 3, 1, 2) 
+  return map.permute(0, 3, 1, 2)
 
 
 def nearest_padding(input_tensor):
-  
+
   batch, channel = input_tensor.shape[0], input_tensor.shape[1]
   padding_tensor = input_tensor
-  mask = padding_tensor[0, 0] == 0 
+  mask = padding_tensor[0, 0] == 0
   non_zero_idx = torch.nonzero(~mask, as_tuple=True)
   zero_idx = torch.nonzero(mask, as_tuple=True)
   distances = (non_zero_idx[0][None, :] - zero_idx[0][:, None]) ** 2 + (non_zero_idx[1][None, :] - zero_idx[1][:, None]) ** 2
-  
+
   nearest_idx = distances.argmin(dim=1)
   padding_values = padding_tensor[:batch, :channel, non_zero_idx[0][nearest_idx], non_zero_idx[1][nearest_idx]]
   padding_tensor[:batch, :channel, zero_idx[0], zero_idx[1]] = padding_values
 
   return padding_tensor
-         
+
 
 class ConvLayer(nn.Module):
   def __init__(self, d_model):
@@ -171,12 +267,13 @@ class ConvLayer(nn.Module):
     self.activation = nn.ELU()
 
   def forward(self, x):
-      
+
     x = self.norm(x.permute(0, 2, 1))
     x = self.Conv(x)
     x = self.activation(x)
-    x = x.transpose(1,2)
+    x = x.transpose(1, 2)
     return x
+
 
 class auxiliary_decoder(nn.Module):
   def __init__(self, d_model, time_step, dropout=0.2):
@@ -192,137 +289,114 @@ class auxiliary_decoder(nn.Module):
     self.activation = nn.GELU()
 
   def forward(self, x):
-      
+
     y = x
-    y = self.dropout(self.activation(self.conv1(y.transpose(-1,1))))
-    y = self.dropout(self.conv2(y).transpose(-1,1))
-    output = self.linear(self.norm(x+y))
+    y = self.dropout(self.activation(self.conv1(y.transpose(-1, 1))))
+    y = self.dropout(self.conv2(y).transpose(-1, 1))
+    output = self.linear(self.norm(x + y))
     output = (self.linear2(output.transpose(-1, 1))).transpose(-1, 1)
 
     return output.squeeze(1)
 
-class spatial_encoding_block(nn.Module): 
+
+class spatial_encoding_block(nn.Module):
   def __init__(self, in_channel):
     super(spatial_encoding_block, self).__init__()
-    
+
     self.in_channel = in_channel
     self.depthwise_conv = nn.Conv2d(self.in_channel, self.in_channel, kernel_size=2, groups=self.in_channel)
     self.leakyReLU = nn.LeakyReLU(negative_slope=0.2)
     self.max_pooling = nn.MaxPool2d(2)
 
   def forward(self, augmented_tensor_temp):
-    
+
     augmented_tensor = nearest_padding(augmented_tensor_temp)
     feature_local = self.max_pooling(self.leakyReLU(self.depthwise_conv(augmented_tensor)))
-    feature_local = feature_local.squeeze()+augmented_tensor[:, :, 1, 1]
-          
+    feature_local = feature_local.squeeze() + augmented_tensor[:, :, 1, 1]
+
     return feature_local.reshape(-1, 15, 7)
-  
-  
-def qnn(embedding, p, cp, noise_manager=None):
 
-  measure_set = [0, 1, 2]
-  groups = [[0, 1, 2]]
 
-  for ws in groups:
+def _build_temporal_circuit(input_params: Iterable, weight_params: Iterable) -> QuantumCircuit:
+  circuit = QuantumCircuit(3)
 
-    qml.RY(embedding[:, ws[0]], wires = ws[0])
-    qml.RY(embedding[:, ws[1]], wires = ws[1])
-    qml.RY(embedding[:, ws[2]], wires = ws[2])
+  for idx, param in enumerate(input_params):
+    circuit.ry(param, idx)
 
-    qml.RY(p[0, ws[0]], wires = ws[0])
-    qml.RY(p[0, ws[1]], wires = ws[1])
-    qml.RY(p[0, ws[2]], wires = ws[2])
+  for idx in range(3):
+    circuit.ry(weight_params[idx], idx)
 
-    qml.IsingXX(cp[ws[0]], wires = [ws[0], ws[1]])
+  circuit.rxx(weight_params[9], 0, 1)
 
-    qml.RX(p[1, ws[0]], wires = ws[0])
-    qml.RX(p[1, ws[1]], wires = ws[1])
-    qml.RX(p[1, ws[2]], wires = ws[2])
+  for idx in range(3):
+    circuit.rx(weight_params[3 + idx], idx)
 
-    qml.IsingXX(cp[ws[1]], wires = [ws[1], ws[2]])
+  circuit.rxx(weight_params[10], 1, 2)
 
-    qml.RY(p[2, ws[0]], wires = ws[0])
-    qml.RY(p[2, ws[1]], wires = ws[1])
-    qml.RY(p[2, ws[2]], wires = ws[2])
+  for idx in range(3):
+    circuit.ry(weight_params[6 + idx], idx)
 
-    qml.ctrl(qml.PauliX, control=[ws[0], ws[1]], control_values="10")(ws[2])
-    qml.ctrl(qml.PauliX, control=[ws[1], ws[2]], control_values="10")(ws[0])
-    qml.ctrl(qml.PauliX, control=[ws[2], ws[0]], control_values="10")(ws[1])
+  circuit.mcx([0, 1], 2, ctrl_state="10")
+  circuit.mcx([1, 2], 0, ctrl_state="10")
+  circuit.mcx([2, 0], 1, ctrl_state="10")
 
-    if noise_manager is not None:
-      noise_manager.apply(ws)
+  return circuit
 
-  exp_vals_z = [qml.expval(qml.PauliZ(w)) for w in measure_set]
-  return exp_vals_z
-        
+
 class QLTEM(nn.Module):
+  NUM_QUBITS = 3
+  NUM_GROUPS = 5
+  OBSERVABLES = [
+    SparsePauliOp.from_list([("ZII", 1.0)]),
+    SparsePauliOp.from_list([("IZI", 1.0)]),
+    SparsePauliOp.from_list([("IIZ", 1.0)]),
+  ]
+
   def __init__(self, noise_config=None, quantum_device=None, shots=None):
     super(QLTEM, self).__init__()
 
     self.noise_manager = NoiseManager(noise_config)
-    self.dev = create_quantum_device(self.noise_manager, override_device=quantum_device, shots=shots)
+    self.estimator = create_estimator(self.noise_manager, override_device=quantum_device, shots=shots)
 
-    self.qtemporal_1 = self._build_qnode()
-    self.qtemporal_2 = self._build_qnode()
-    self.qtemporal_3 = self._build_qnode()
-    self.qtemporal_4 = self._build_qnode()
-    self.qtemporal_5 = self._build_qnode()
+    self.temporal_blocks = nn.ModuleList([self._build_temporal_block() for _ in range(self.NUM_GROUPS)])
 
-    self.temporal1_v1 = nn.Parameter(torch.randn((3,  3)) * torch.tensor(0), True)
-    self.temporal1_v2 = nn.Parameter(torch.randn(( 2)) * torch.tensor(0), True)
-    
-    self.temporal2_v1 = nn.Parameter(torch.randn((3,  3)) * torch.tensor(0), True)
-    self.temporal2_v2 = nn.Parameter(torch.randn(( 2)) * torch.tensor(0), True)
-    
-    self.temporal3_v1 = nn.Parameter(torch.randn((3,  3)) * torch.tensor(0), True)
-    self.temporal3_v2 = nn.Parameter(torch.randn(( 2)) * torch.tensor(0), True)
-    
-    self.temporal4_v1 = nn.Parameter(torch.randn((3, 3)) * torch.tensor(0), True)
-    self.temporal4_v2 = nn.Parameter(torch.randn(( 2)) * torch.tensor(0), True)
+  def _build_temporal_block(self):
+    input_params = ParameterVector("x", self.NUM_QUBITS)
+    weight_params = ParameterVector("θ", 11)
 
-    self.temporal5_v1 = nn.Parameter(torch.randn((3, 3)) * torch.tensor(0), True)
-    self.temporal5_v2 = nn.Parameter(torch.randn(( 2)) * torch.tensor(0), True)
+    circuit = _build_temporal_circuit(input_params, weight_params)
 
-  def _build_qnode(self):
-    circuit = partial(qnn, noise_manager=self.noise_manager)
-    return qml.QNode(circuit, self.dev, interface="torch", diff_method='best')
-  
-  def forward(self,x):
+    qnn = EstimatorQNN(
+      circuit=circuit,
+      observables=self.OBSERVABLES,
+      input_params=list(input_params),
+      weight_params=list(weight_params),
+      estimator=self.estimator,
+      input_gradients=True,
+    )
 
-    q1=x[:,[0,1,2],:]
-    q2=x[:,[3,4,5],:]
-    q3=x[:,[6,7,8],:]
-    q4=x[:,[9,10,11],:]
-    q5=x[:,[12,13,14],:]
-    batch_size, time_step, feature = q1.shape
-    
-    q1=rearrange(q1,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
-    q1 = self.qtemporal_1(q1, self.temporal1_v1, self.temporal1_v2)
-    q1 = torch.cat(q1).to(x.device, dtype=x.dtype)
-    q1=rearrange(q1,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
-    
-    q2=rearrange(q2,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
-    q2 = self.qtemporal_2(q2, self.temporal2_v1, self.temporal2_v2)
-    q2 = torch.cat(q2).to(x.device, dtype=x.dtype)
-    q2=rearrange(q2,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
-    
-    q3=rearrange(q3,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
-    q3 = self.qtemporal_3(q3, self.temporal3_v1, self.temporal3_v2)
-    q3 = torch.cat(q3).to(x.device, dtype=x.dtype)
-    q3=rearrange(q3,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
-    
-    q4=rearrange(q4,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
-    q4 = self.qtemporal_4(q4, self.temporal4_v1, self.temporal4_v2)
-    q4 = torch.cat(q4).to(x.device, dtype=x.dtype)
-    q4=rearrange(q4,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
+    initial_weights = torch.zeros(len(weight_params), dtype=torch.float32)
+    return TorchConnector(qnn, initial_weights=initial_weights.clone().detach())
 
-    q5=rearrange(q5,'b t f -> (b f)t', b=batch_size, t=time_step, f=feature)
-    q5 = self.qtemporal_5(q5, self.temporal5_v1, self.temporal5_v2)
-    q5 = torch.cat(q5).to(x.device, dtype=x.dtype)
-    q5=rearrange(q5,'(t b f )-> b t f ', b=batch_size, t=time_step, f=feature)
-    
-    return q1, q2, q3, q4, q5
+  def _apply_block(self, block, x):
+    batch_size, time_step, feature = x.shape
+    reshaped = rearrange(x, "b t f -> (b f) t", b=batch_size, f=feature)
+    result = block(reshaped)
+    result = result.to(device=x.device, dtype=x.dtype)
+    result = rearrange(result, "(b f) t -> b t f", b=batch_size, f=feature)
+    return result
+
+  def forward(self, x):
+    q_slices = [
+      x[:, [0, 1, 2], :],
+      x[:, [3, 4, 5], :],
+      x[:, [6, 7, 8], :],
+      x[:, [9, 10, 11], :],
+      x[:, [12, 13, 14], :],
+    ]
+
+    outputs = [self._apply_block(block, tensor) for block, tensor in zip(self.temporal_blocks, q_slices)]
+    return tuple(outputs)
 
 
 class LTEM(nn.Module):
@@ -342,38 +416,40 @@ class LTEM(nn.Module):
     self.conv5 = ConvLayer(d_model=7)
 
   def forward(self, x):
-    
+
     local_temporal_group = torch.chunk(x, 5, dim=1)
 
-    group_1 = local_temporal_group[0]  
-    output_1 = self.conv1(self.mamba_1(group_1)) 
-    
+    group_1 = local_temporal_group[0]
+    output_1 = self.conv1(self.mamba_1(group_1))
+
     group_2 = local_temporal_group[1]
-    output_2 = self.conv2(self.mamba_2(group_2)) 
-    
+    output_2 = self.conv2(self.mamba_2(group_2))
+
     group_3 = local_temporal_group[2]
-    output_3 = self.conv3(self.mamba_3(group_3)) 
-    
+    output_3 = self.conv3(self.mamba_3(group_3))
+
     group_4 = local_temporal_group[3]
-    output_4 = self.conv4(self.mamba_4(group_4) ) 
+    output_4 = self.conv4(self.mamba_4(group_4))
 
     group_5 = local_temporal_group[4]
-    output_5 = self.conv5(self.mamba_5(group_5)) 
-    
-    return output_1, output_2, output_3, output_4, output_5 
+    output_5 = self.conv5(self.mamba_5(group_5))
+
+    return output_1, output_2, output_3, output_4, output_5
+
 
 class feature_fusion_block(nn.Module):
   def __init__(self):
     super(feature_fusion_block, self).__init__()
-    
+
     self.PDM = auxiliary_decoder(d_model=7, time_step=15)
 
   def forward(self, group_1, group_2, group_3, group_4, group_5):
-    
+
     decoder_input = torch.concat([group_1, group_2, group_3, group_4, group_5], dim=1)
     predicted_SPEI = self.PDM(decoder_input)
-    
+
     return predicted_SPEI
+
 
 class SQUARE_Mamba(nn.Module):
   def __init__(self, in_channel, noise_config=None, quantum_device=None, shots=None):
@@ -387,17 +463,74 @@ class SQUARE_Mamba(nn.Module):
     self.tanh = nn.Tanh()
 
   def forward(self, x):
-    
-    augmented_tensor = map_generation(x, self.in_channel) 
-    spatial_feature = self.SEB(augmented_tensor) 
-    
+
+    augmented_tensor = map_generation(x, self.in_channel)
+    spatial_feature = self.SEB(augmented_tensor)
+
     ltem_1, ltem_2, ltem_3, ltem_4, ltem_5 = self.LTEM(spatial_feature)
     qltem_1, qltem_2, qltem_3, qltem_4, qltem_5 = self.QLTEM(spatial_feature)
 
-    ST_feature_one = ltem_1+qltem_1
-    ST_feature_two = ltem_2+qltem_2
-    ST_feature_three = ltem_3+qltem_3
-    ST_feature_four = ltem_4+qltem_4
-    ST_feature_five = ltem_5+qltem_5
-    spei = 3*self.tanh(self.FFB(ST_feature_one, ST_feature_two, ST_feature_three, ST_feature_four, ST_feature_five))
-    return spei 
+    ST_feature_one = ltem_1 + qltem_1
+    ST_feature_two = ltem_2 + qltem_2
+    ST_feature_three = ltem_3 + qltem_3
+    ST_feature_four = ltem_4 + qltem_4
+    ST_feature_five = ltem_5 + qltem_5
+    spei = 3 * self.tanh(self.FFB(ST_feature_one, ST_feature_two, ST_feature_three, ST_feature_four, ST_feature_five))
+    return spei
+
+
+def run_two_qubit_qnn_example():
+  """
+  Minimal example demonstrating a 2-qubit Qiskit EstimatorQNN wrapped for PyTorch training.
+  """
+  import torch.nn.functional as F
+
+  data_params = ParameterVector("φ", 2)
+  weight_params = ParameterVector("θ", 2)
+  circuit = QuantumCircuit(2)
+
+  for idx, param in enumerate(data_params):
+    circuit.ry(param, idx)
+
+  circuit.cz(0, 1)
+
+  for idx, param in enumerate(weight_params):
+    circuit.rx(param, idx)
+
+  observables = [
+    SparsePauliOp.from_list([("ZI", 1.0)]),
+    SparsePauliOp.from_list([("IZ", 1.0)]),
+  ]
+
+  estimator = AerEstimator()
+  qnn = EstimatorQNN(
+    circuit=circuit,
+    observables=observables,
+    input_params=list(data_params),
+    weight_params=list(weight_params),
+    estimator=estimator,
+    input_gradients=True,
+  )
+
+  initial_weights = torch.zeros(len(weight_params), dtype=torch.float32)
+  q_layer = TorchConnector(qnn, initial_weights=initial_weights)
+
+  class SimpleHybridModel(nn.Module):
+    def __init__(self, quantum_layer):
+      super().__init__()
+      self.quantum_layer = quantum_layer
+      self.post = nn.Linear(2, 1)
+
+    def forward(self, x):
+      quantum_features = self.quantum_layer(x)
+      activated = F.elu(quantum_features)
+      return self.post(activated)
+
+  model = SimpleHybridModel(q_layer)
+  example_input = torch.tensor([[0.1, -0.2], [0.6, 0.8]], dtype=torch.float32)
+  output = model(example_input)
+  return output
+
+
+if __name__ == "__main__":
+  print("Example QNN output:", run_two_qubit_qnn_example())

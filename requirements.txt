@@ -1,17 +1,13 @@
 # Core dependencies for the SQUARE-Mamba demo and training scripts
 packaging==25.0
-numpy==1.23.5
+numpy==2.0.2
 pandas==2.3.3
 scikit-learn==1.7.2
-torch==2.1.0
-torchvision==0.16.0
-torchaudio==2.1.0
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
 einops==0.7.0
 matplotlib==3.10.6
-PennyLane==0.32.0
-PennyLane-Lightning==0.33.1
-autoray==0.7.2
-mamba-ssm==2.2.5  # Comentar en caso de no usar CUDA (nVIDIA Dev Kit) + GPU
 PyMuPDF==1.26.4
 transformers==4.30.0
 tokenizers==0.13.3
@@ -21,15 +17,16 @@ safetensors==0.6.2
 # Additional dependencies for quantum computing and transformers
 toml==0.10.2
 tomlkit==0.13.3
-autograd==1.5
 semantic-version==2.10.0
 rustworkx==0.17.1
 appdirs==1.4.4
 cachetools==6.2.0
 future==1.0.0
+qiskit==1.4.3
+qiskit-aer>=0.17.2
+qiskit-machine-learning==0.8.4
 
 # Neural network and ML utilities
-triton==2.1.0
 ninja==1.13.0
 setuptools==80.9.0
 

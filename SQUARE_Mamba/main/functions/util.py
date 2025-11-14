@@ -4,7 +4,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import StandardScaler
 
 
 _BASE_DIR = Path(__file__).resolve().parent.parent
@@ -39,19 +38,20 @@ def r_square(y_true, y_pred):
   return r2
 
 def Create_dataset(data, GT, num_sample):
-  X, gt = [], []
-  
-  for i in range(num_sample):  
-    feature = data[i:i+15, :9, :7]
-    for m in range(9):
-      for n in range(7):
-        scaler = StandardScaler()
-        scaler.fit(feature[:, m, n].reshape(-1, 1))
-        feature[:, m, n] = scaler.transform(feature[:, m, n].reshape(-1, 1)).reshape(-1)
-    X.append(feature)
-    gt.append(GT[i+15, :9])
+  features = np.empty((num_sample, 15, 9, 7), dtype=np.float32)
+  targets = np.empty((num_sample, 9), dtype=np.float32)
 
-  return torch.tensor(X).transpose(1, 2).float(), torch.tensor(gt).float()
+  for i in range(num_sample):
+    feature = data[i:i + 15, :9, :7].astype(np.float32, copy=False)
+    mean = feature.mean(axis=0, keepdims=True)
+    std = feature.std(axis=0, keepdims=True)
+    std[std == 0] = 1.0
+    features[i] = (feature - mean) / std
+    targets[i] = GT[i + 15, :9].astype(np.float32, copy=False)
+
+  features = torch.from_numpy(features.swapaxes(1, 2))
+  targets = torch.from_numpy(targets)
+  return features, targets
 
 
 def parse_noise_spec(spec: str | None):

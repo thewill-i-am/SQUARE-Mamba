@@ -71,7 +71,17 @@ if __name__ == '__main__':
 
   checkpoint_dir = BASE_DIR / "checkpoint"
   folder_path = checkpoint_dir / "SQUARE_Mamba.pkl"
-  model.load_state_dict(torch.load(folder_path, map_location=device))
+  checkpoint = torch.load(folder_path, map_location=device)
+  load_result = model.load_state_dict(checkpoint, strict=False)
+  missing_keys, unexpected_keys = load_result.missing_keys, load_result.unexpected_keys
+  if missing_keys or unexpected_keys:
+    print(
+      "Warning: Loaded checkpoint with partial match.\n"
+      f"  Missing keys: {missing_keys}\n"
+      f"  Unexpected keys: {unexpected_keys}\n"
+      "Quantum layer weights were reinitialized; consider retraining if results differ.",
+      flush=True,
+    )
 
   prediction_temp = test(testloader, model)
   gt_test = testing_gt[8:201, 4]

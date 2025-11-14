@@ -1,10 +1,11 @@
-numpy==1.26.4
+numpy==2.0.2
 pandas
 scikit-learn
 torch==1.13.1
 einops
 matplotlib
 tqdm
-pennylane=0.38.0
-mamba-ssm
 pymupdf
+qiskit==1.4.3
+qiskit-aer>=0.17.2
+qiskit-machine-learning==0.8.4
