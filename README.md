@@ -130,6 +130,32 @@ The `train_ultra_fast.py` script runs two experiments (baseline vs noisy) with m
 
 Both scripts automatically compare baseline (no noise) vs noisy training and display results.
 
+### Full-Scale Experiment (251 Epochs)
+
+For comprehensive model comparison:
+
+```bash
+# Compare quantum vs classical (both 251 epochs, ~4 days total)
+./run_test.sh experiment_full_comparison.py --model both --epochs 251
+
+# Quantum only (~2 days)
+./run_test.sh experiment_full_comparison.py --model quantum --epochs 251
+
+# Classical only (~1.5 days)
+./run_test.sh experiment_full_comparison.py --model classical --epochs 251
+
+# With quantum noise
+./run_test.sh experiment_full_comparison.py \
+    --model quantum --epochs 251 --noise depolarizing=0.02
+```
+
+**Features**:
+- Automatic checkpointing every 10 epochs
+- Detailed logging with progress estimates
+- Saves best model based on validation R²
+- Generates comparison report
+- See `EXPERIMENT_GUIDE.md` for complete instructions
+
 ### Full Training Scripts
 
 ```bash
